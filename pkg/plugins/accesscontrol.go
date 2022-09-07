@@ -25,7 +25,7 @@ var (
 // Protects access to the Configuration > Plugins page
 func AdminAccessEvaluator(cfg *setting.Cfg) ac.Evaluator {
 	// This is a little hack to preserve the legacy behavior
-	// Grafana Admins get access to the page if cfg.PluginAdminEnabled (even if the can only list plugins)
+	// Grafana Admins get access to the page if cfg.PluginAdminEnabled (even if they can only list plugins)
 	// Org Admins can access the tab whenever
 	if cfg.PluginAdminEnabled {
 		return ac.EvalAny(
