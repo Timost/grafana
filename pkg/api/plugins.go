@@ -148,14 +148,14 @@ func (hs *HTTPServer) GetPluginSettingByID(c *models.ReqContext) response.Respon
 		return response.Error(http.StatusNotFound, "Plugin not found, no installed plugin with that id", nil)
 	}
 
-	// In a first iteration, we only have one permission for app plugins.
-	// We will need a different permission to allow users to configure the plugin without needing access to it.
-	if plugin.IsApp() {
-		hasAccess := ac.HasAccess(hs.AccessControl, c)
-		if !hasAccess(ac.ReqSignedIn,
-			ac.EvalPermission(plugins.ActionAppAccess, plugins.ScopeProvider.GetResourceScope(plugin.ID))) {
-			return response.Error(http.StatusForbidden, "Access Denied", nil)
-		}
+	hasAccess := ac.HasAccess(hs.AccessControl, c)
+	if plugin.IsCorePlugin() && !hasAccess(ac.ReqSignedIn,
+		ac.EvalPermission(plugins.ActionRead, plugins.ScopeProvider.GetResourceScope(plugin.ID))) {
+		return response.Error(http.StatusForbidden, "Access Denied", nil)
+	}
+	if !plugin.IsCorePlugin() && !hasAccess(ac.ReqSignedIn,
+		ac.EvalPermission(plugins.ActionNonCoreRead, plugins.ScopeProvider.GetResourceScope(plugin.ID))) {
+		return response.Error(http.StatusForbidden, "Access Denied", nil)
 	}
 
 	dto := &dtos.PluginSetting{
