@@ -50,6 +50,17 @@ func (hs *HTTPServer) GetPluginList(c *models.ReqContext) response.Response {
 	filteredPluginDefinitions := []plugins.PluginDTO{}
 	filteredPluginIDs := map[string]bool{}
 	for _, pluginDef := range pluginDefinitions {
+		// Enforce RBAC on plugins
+		// FIXME: use a checker instead to leverage wildcard scopes
+		if !pluginDef.IsCorePlugin() && !hasAccess(ac.ReqHasRole(org.RoleAdmin),
+			ac.EvalPermission(plugins.ActionNonCoreRead, plugins.ScopeProvider.GetResourceScope(pluginDef.ID))) {
+			continue
+		}
+		if pluginDef.IsCorePlugin() && !hasAccess(ac.ReqSignedIn,
+			ac.EvalPermission(plugins.ActionRead, plugins.ScopeProvider.GetResourceScope(pluginDef.ID))) {
+			continue
+		}
+
 		// filter out app sub plugins
 		if embeddedFilter == "0" && pluginDef.IncludedInAppID != "" {
 			continue
@@ -57,12 +68,6 @@ func (hs *HTTPServer) GetPluginList(c *models.ReqContext) response.Response {
 
 		// filter out core plugins
 		if (coreFilter == "0" && pluginDef.IsCorePlugin()) || (coreFilter == "1" && !pluginDef.IsCorePlugin()) {
-			continue
-		}
-
-		// FIXME: use a checker instead to leverage wildcard scopes
-		if !pluginDef.IsCorePlugin() && !hasAccess(ac.ReqHasRole(org.RoleAdmin),
-			ac.EvalPermission(plugins.ActionNonCoreRead, plugins.ScopeProvider.GetResourceScope(pluginDef.ID))) {
 			continue
 		}
 
