@@ -38,7 +38,6 @@ func (hs *HTTPServer) GetPluginList(c *models.ReqContext) response.Response {
 	// "1" => filter out non-core plugins
 	coreFilter := c.Query("core")
 
-	reqOrgAdmin := ac.ReqHasRole(org.RoleAdmin)
 	hasAccess := ac.HasAccess(hs.AccessControl, c)
 
 	pluginSettingsMap, err := hs.pluginSettings(c.Req.Context(), c.OrgID)
@@ -62,7 +61,7 @@ func (hs *HTTPServer) GetPluginList(c *models.ReqContext) response.Response {
 		}
 
 		// FIXME: use a checker instead to leverage wildcard scopes
-		if !pluginDef.IsCorePlugin() && !hasAccess(reqOrgAdmin,
+		if !pluginDef.IsCorePlugin() && !hasAccess(ac.ReqHasRole(org.RoleAdmin),
 			ac.EvalPermission(plugins.ActionNonCoreRead, plugins.ScopeProvider.GetResourceScope(pluginDef.ID))) {
 			continue
 		}
