@@ -9,8 +9,10 @@ import (
 
 const (
 	// Plugins actions
-	ActionInstall = "plugins:install"
-	ActionWrite   = "plugins:write"
+	ActionInstall     = "plugins:install"
+	ActionWrite       = "plugins:write"
+	ActionRead        = "plugins:read"
+	ActionNonCoreRead = "plugins.noncore:read"
 
 	// App Plugins actions
 	ActionAppAccess = "plugins.app:access"
@@ -18,12 +20,26 @@ const (
 
 var (
 	ScopeProvider = ac.NewScopeProvider("plugins")
-	// Protects access to the Configuration > Plugins page
-	AdminAccessEvaluator = ac.EvalAny(ac.EvalPermission(ActionWrite), ac.EvalPermission(ActionInstall))
 )
 
+// Protects access to the Configuration > Plugins page
+func AdminAccessEvaluator(cfg *setting.Cfg) ac.Evaluator {
+	// This is a little hack to preserve the legacy behavior
+	// Grafana Admins get access to the page if cfg.PluginAdminEnabled (even if the can only list plugins)
+	// Org Admins can access the tab whenever
+	if cfg.PluginAdminEnabled {
+		return ac.EvalAny(
+			ac.EvalPermission(ActionWrite),
+			ac.EvalPermission(ActionInstall),
+			ac.EvalPermission(ActionNonCoreRead))
+	}
+
+	// Plugin Admin is disabled  => No installation
+	return ac.EvalPermission(ActionWrite)
+}
+
+// Legacy handler that protects access to the Configuration > Plugins page
 func ReqCanAdminPlugins(cfg *setting.Cfg) func(rc *models.ReqContext) bool {
-	// Legacy handler that protects access to the Configuration > Plugins page
 	return func(rc *models.ReqContext) bool {
 		return rc.OrgRole == org.RoleAdmin || cfg.PluginAdminEnabled && rc.IsGrafanaAdmin
 	}
@@ -38,6 +54,18 @@ func DeclareRBACRoles(service ac.Service, cfg *setting.Cfg) error {
 			Group:       "Plugins",
 			Permissions: []ac.Permission{
 				{Action: ActionAppAccess, Scope: ScopeProvider.GetResourceAllScope()},
+			},
+		},
+		Grants: []string{string(org.RoleViewer)},
+	}
+	PluginsReader := ac.RoleRegistration{
+		Role: ac.RoleDTO{
+			Name:        ac.FixedRolePrefix + "plugins:reader",
+			DisplayName: "Plugin Reader",
+			Description: "List plugins and their settings",
+			Group:       "Plugins",
+			Permissions: []ac.Permission{
+				{Action: ActionRead, Scope: ScopeProvider.GetResourceAllScope()},
 			},
 		},
 		Grants: []string{string(org.RoleViewer)},
@@ -71,5 +99,18 @@ func DeclareRBACRoles(service ac.Service, cfg *setting.Cfg) error {
 		PluginsMaintainer.Grants = []string{}
 	}
 
-	return service.DeclareFixedRoles(AppPluginsReader, PluginsWriter, PluginsMaintainer)
+	PluginsNonCoreReader := ac.RoleRegistration{
+		Role: ac.RoleDTO{
+			Name:        ac.FixedRolePrefix + "plugins.noncore:reader",
+			DisplayName: "Non-Core Plugin Reader",
+			Description: "List non plugins and their settings",
+			Group:       "Plugins",
+			Permissions: []ac.Permission{
+				{Action: ActionNonCoreRead, Scope: ScopeProvider.GetResourceAllScope()},
+			},
+		},
+		Grants: []string{string(org.RoleAdmin), ac.RoleGrafanaAdmin},
+	}
+
+	return service.DeclareFixedRoles(AppPluginsReader, PluginsReader, PluginsWriter, PluginsMaintainer, PluginsNonCoreReader)
 }
