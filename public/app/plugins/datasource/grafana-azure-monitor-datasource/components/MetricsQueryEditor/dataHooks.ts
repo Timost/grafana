@@ -75,26 +75,26 @@ export const useMetricNamespaces: DataHook = (query, datasource, onChange, setEr
 
 export const useMetricNames: DataHook = (query, datasource, onChange, setError) => {
   const { subscription } = query;
-  const { metricNamespace, metricName, resourceGroup, resourceName } = query.azureMonitor ?? {};
+  const { metricNamespace, metricName, resourceGroup, resourceName, customNamespace } = query.azureMonitor ?? {};
 
   return useAsyncState(
     async () => {
       if (!subscription || !metricNamespace || !resourceGroup || !resourceName) {
         return;
       }
-
       const results = await datasource.azureMonitorDatasource.getMetricNames({
         subscription,
         resourceGroup,
         resourceName,
         metricNamespace,
+        customNamespace,
       });
       const options = formatOptions(results, metricName);
 
       return options;
     },
     setError,
-    [subscription, resourceGroup, resourceName, metricNamespace]
+    [subscription, resourceGroup, resourceName, metricNamespace, customNamespace]
   );
 };
 

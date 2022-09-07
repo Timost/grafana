@@ -223,7 +223,7 @@ export default class AzureMonitorDatasource extends DataSourceWithBackend<AzureM
           ];
           for (const namespace of storageNamespaces) {
             if (!find(result, ['value', namespace.toLowerCase()])) {
-              result.push({ value: namespace, text: namespace });
+              result.push({ value: namespace, text: namespace, classification: '' });
             }
           }
         }

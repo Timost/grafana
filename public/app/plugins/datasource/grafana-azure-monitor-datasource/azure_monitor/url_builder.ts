@@ -60,11 +60,11 @@ export default class UrlBuilder {
     if ('resourceUri' in query) {
       resourceUri = query.resourceUri;
     } else {
-      const { subscription, resourceGroup, metricNamespace, resourceName } = query;
+      const { subscription, resourceGroup, resourceName } = query;
       resourceUri = UrlBuilder.buildResourceUri(templateSrv, {
         subscription,
         resourceGroup,
-        metricNamespace,
+        metricNamespace: 'microsoft.insights/components',
         resourceName,
       });
     }
@@ -81,12 +81,11 @@ export default class UrlBuilder {
     templateSrv: TemplateSrv
   ) {
     let resourceUri: string;
-    const { metricNamespace } = query;
-
+    const { customNamespace } = query;
     if ('resourceUri' in query) {
       resourceUri = query.resourceUri;
     } else {
-      const { subscription, resourceGroup, metricNamespace, resourceName } = query;
+      const { subscription, metricNamespace, resourceGroup, resourceName } = query;
       resourceUri = UrlBuilder.buildResourceUri(templateSrv, {
         subscription,
         resourceGroup,
@@ -96,8 +95,8 @@ export default class UrlBuilder {
     }
 
     let url = `${baseUrl}${resourceUri}/providers/microsoft.insights/metricdefinitions?api-version=${apiVersion}`;
-    if (metricNamespace) {
-      url += `&metricnamespace=${encodeURIComponent(metricNamespace)}`;
+    if (customNamespace) {
+      url += `&metricnamespace=${encodeURIComponent(customNamespace)}`;
     }
     return url;
   }

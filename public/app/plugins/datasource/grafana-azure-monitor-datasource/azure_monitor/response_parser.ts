@@ -12,8 +12,8 @@ export default class ResponseParser {
     result: any,
     textFieldName: string,
     valueFieldName: string
-  ): Array<{ text: string; value: string }> {
-    const list: Array<{ text: string; value: string }> = [];
+  ): Array<{ text: string; value: string; classification: string }> {
+    const list: Array<{ text: string; value: string; classification: string }> = [];
 
     if (!result) {
       return list;
@@ -23,10 +23,12 @@ export default class ResponseParser {
       if (!find(list, ['value', get(result.value[i], valueFieldName)])) {
         const value = get(result.value[i], valueFieldName);
         const text = get(result.value[i], textFieldName, value);
+        const classification = get(result.value[i], 'classification');
 
         list.push({
           text: text,
           value: value,
+          classification: classification,
         });
       }
     }
