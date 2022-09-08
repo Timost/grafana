@@ -7,12 +7,25 @@ import { useAsync } from 'react-use';
 
 import { AppEvents, SelectableValue, GrafanaTheme2 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
-import { ActionMeta, AsyncSelect, useStyles2, InputActionMeta } from '@grafana/ui';
+import { ActionMeta, AsyncSelect, useStyles2, InputActionMeta, Icon, Stack, Tooltip } from '@grafana/ui';
 import appEvents from 'app/core/app_events';
 import { contextSrv } from 'app/core/services/context_srv';
 import { createFolder, getFolderById, searchFolders } from 'app/features/manage-dashboards/state/actions';
 import { DashboardSearchHit } from 'app/features/search/types';
 import { AccessControlAction, PermissionLevelString } from 'app/types';
+
+const SlashesWarning = () => {
+  const styles = useStyles2(getStyles);
+  const onClick = () => window.open('https://github.com/grafana/hosted-grafana/issues/1667', '_blank');
+  return (
+    <Stack gap={0.5}>
+      <div className={styles.slashNotAllowed}>Folders with &apos;/&apos; character are not allowed.</div>
+      <Tooltip placement="top" content={'Link to the Github issue'} theme="info">
+        <Icon name="info-circle" size="xs" className={styles.infoIcon} onClick={onClick} />
+      </Tooltip>
+    </Stack>
+  );
+};
 
 export type FolderPickerFilter = (hits: DashboardSearchHit[]) => DashboardSearchHit[];
 
@@ -69,8 +82,7 @@ export function FolderPicker(props: Props) {
   const isClearable = typeof onClear === 'function';
   const [folder, setFolder] = useState<SelectedFolder | null>(null);
   const [inputValue, setInputValue] = useState<string>('');
-  const styles = useStyles2(getStyles);
-  const isUsingSlashes = containsSlashes(inputValue);
+  const isUsingSlashes: boolean = containsSlashes(inputValue);
 
   const getOptions = useCallback(
     async (query: string) => {
@@ -226,9 +238,7 @@ export function FolderPicker(props: Props) {
   return (
     <>
       <div data-testid={selectors.components.FolderPicker.containerV2}>
-        {dissalowSlashes && isUsingSlashes && (
-          <div className={styles.slashNotAllowed}>Folders with &apos;/&apos; character are not allowed.</div>
-        )}
+        {dissalowSlashes && isUsingSlashes && <SlashesWarning />}
         <AsyncSelect
           inputId={inputId}
           aria-label={selectors.components.FolderPicker.input}
@@ -286,5 +296,11 @@ const getStyles = (theme: GrafanaTheme2) => ({
     color: ${theme.colors.warning.main};
     font-size: 12px;
     margin-bottom: 2px;
+  `,
+  infoIcon: css`
+    color: ${theme.colors.warning.main};
+    font-size: 12px;
+    margin-bottom: 2px;
+    cursor: pointer;
   `,
 });
