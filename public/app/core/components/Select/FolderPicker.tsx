@@ -1,16 +1,18 @@
+import { css } from '@emotion/css';
 import { t } from '@lingui/macro';
 import { debounce } from 'lodash';
-import React, { PureComponent } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { components } from 'react-select';
+import { useAsync } from 'react-use';
 
-import { AppEvents, SelectableValue } from '@grafana/data';
+import { AppEvents, SelectableValue, GrafanaTheme2 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
-import { ActionMeta, AsyncSelect, LoadOptionsCallback } from '@grafana/ui';
+import { ActionMeta, AsyncSelect, useStyles2, InputActionMeta } from '@grafana/ui';
+import appEvents from 'app/core/app_events';
 import { contextSrv } from 'app/core/services/context_srv';
 import { createFolder, getFolderById, searchFolders } from 'app/features/manage-dashboards/state/actions';
 import { DashboardSearchHit } from 'app/features/search/types';
-
-import { AccessControlAction, PermissionLevelString } from '../../../types';
-import appEvents from '../../app_events';
+import { AccessControlAction, PermissionLevelString } from 'app/types';
 
 export type FolderPickerFilter = (hits: DashboardSearchHit[]) => DashboardSearchHit[];
 
@@ -19,7 +21,7 @@ export interface Props {
   enableCreateNew?: boolean;
   rootName?: string;
   enableReset?: boolean;
-  dashboardId?: any;
+  dashboardId?: number | string;
   initialTitle?: string;
   initialFolderId?: number;
   permissionLevel?: Exclude<PermissionLevelString, PermissionLevelString.Admin>;
@@ -28,6 +30,7 @@ export interface Props {
   showRoot?: boolean;
   onClear?: () => void;
   accessControlMetadata?: boolean;
+  dissalowSlashes?: boolean;
   /**
    * Skips loading all folders in order to find the folder matching
    * the folder where the dashboard is stored.
@@ -38,139 +41,87 @@ export interface Props {
   /** The id of the search input. Use this to set a matching label with htmlFor */
   inputId?: string;
 }
+export type SelectedFolder = SelectableValue<number>;
 
-interface State {
-  folder: SelectableValue<number> | null;
-}
+const containsSlashes = (str: string): boolean => str.indexOf('/') !== -1;
 
-export class FolderPicker extends PureComponent<Props, State> {
-  debouncedSearch: any;
+const Input = (props: any) => <components.Input {...props} isHidden={false} />;
 
-  constructor(props: Props) {
-    super(props);
+export function FolderPicker(props: Props) {
+  const {
+    dashboardId,
+    allowEmpty,
+    onChange,
+    filter,
+    enableCreateNew,
+    inputId,
+    onClear,
+    enableReset,
+    initialFolderId,
+    initialTitle,
+    permissionLevel,
+    rootName,
+    showRoot,
+    skipInitialLoad,
+    accessControlMetadata,
+    dissalowSlashes,
+  } = props;
+  const isClearable = typeof onClear === 'function';
+  const [folder, setFolder] = useState<SelectedFolder | null>(null);
+  //const [isUsingSlashes, setIsUsingSlashes] = useState(false);
+  const [inputValue, setInputValue] = useState<string>('');
+  const styles = useStyles2(getStyles);
+  const isUsingSlashes = containsSlashes(inputValue);
 
-    this.state = {
-      folder: null,
-    };
+  const getOptions = useCallback(
+    async (query: string) => {
+      const searchHits = await searchFolders(query, permissionLevel, accessControlMetadata);
+      const options: Array<SelectableValue<number>> = mapSearchHitsToOptions(
+        searchHits,
+        Boolean(dissalowSlashes),
+        filter
+      );
 
-    this.debouncedSearch = debounce(this.loadOptions, 300, {
-      leading: true,
-      trailing: true,
-    });
-  }
+      const hasAccess =
+        contextSrv.hasAccess(AccessControlAction.DashboardsWrite, contextSrv.isEditor) ||
+        contextSrv.hasAccess(AccessControlAction.DashboardsCreate, contextSrv.isEditor);
 
-  static defaultProps: Partial<Props> = {
-    rootName: 'General',
-    enableReset: false,
-    initialTitle: '',
-    enableCreateNew: false,
-    permissionLevel: PermissionLevelString.Edit,
-    allowEmpty: false,
-    showRoot: true,
-  };
+      if (hasAccess && rootName?.toLowerCase().startsWith(query.toLowerCase()) && showRoot) {
+        options.unshift({ label: rootName, value: 0 });
+      }
 
-  componentDidMount = async () => {
-    if (this.props.skipInitialLoad) {
-      const folder = await getInitialValues({
-        getFolder: getFolderById,
-        folderId: this.props.initialFolderId,
-        folderName: this.props.initialTitle,
-      });
-      this.setState({ folder });
-      return;
-    }
-
-    await this.loadInitialValue();
-  };
-
-  // when debouncing, we must use the callback form of react-select's loadOptions so we don't
-  // drop results for user input. This must not return a promise/use await.
-  loadOptions = (query: string, callback: LoadOptionsCallback<number>): void => {
-    this.searchFolders(query).then(callback);
-  };
-
-  private searchFolders = async (query: string) => {
-    const {
-      rootName,
+      if (
+        enableReset &&
+        query === '' &&
+        initialTitle !== '' &&
+        !options.find((option) => option.label === initialTitle)
+      ) {
+        options.unshift({ label: initialTitle, value: initialFolderId });
+      }
+      return options;
+    },
+    [
       enableReset,
+      initialFolderId,
       initialTitle,
       permissionLevel,
-      filter,
-      accessControlMetadata,
-      initialFolderId,
+      rootName,
       showRoot,
-    } = this.props;
+      accessControlMetadata,
+      filter,
+      dissalowSlashes,
+    ]
+  );
 
-    const searchHits = await searchFolders(query, permissionLevel, accessControlMetadata);
-    const options: Array<SelectableValue<number>> = mapSearchHitsToOptions(searchHits, filter);
+  const debouncedSearch = useMemo(() => {
+    return debounce(getOptions, 300, { leading: true });
+  }, [getOptions]);
 
-    const hasAccess =
-      contextSrv.hasAccess(AccessControlAction.DashboardsWrite, contextSrv.isEditor) ||
-      contextSrv.hasAccess(AccessControlAction.DashboardsCreate, contextSrv.isEditor);
-
-    if (hasAccess && rootName?.toLowerCase().startsWith(query.toLowerCase()) && showRoot) {
-      options.unshift({ label: rootName, value: 0 });
-    }
-
-    if (
-      enableReset &&
-      query === '' &&
-      initialTitle !== '' &&
-      !options.find((option) => option.label === initialTitle)
-    ) {
-      options.unshift({ label: initialTitle, value: initialFolderId });
-    }
-
-    return options;
-  };
-
-  onFolderChange = (newFolder: SelectableValue<number>, actionMeta: ActionMeta) => {
-    if (!newFolder) {
-      newFolder = { value: 0, label: this.props.rootName };
-    }
-
-    if (actionMeta.action === 'clear' && this.props.onClear) {
-      this.props.onClear();
-      return;
-    }
-
-    this.setState(
-      {
-        folder: newFolder,
-      },
-      () => this.props.onChange({ id: newFolder.value!, title: newFolder.label! })
-    );
-  };
-
-  createNewFolder = async (folderName: string) => {
-    const newFolder = await createFolder({ title: folderName });
-    let folder: SelectableValue<number> = { value: -1, label: 'Not created' };
-
-    if (newFolder.id > -1) {
-      appEvents.emit(AppEvents.alertSuccess, ['Folder Created', 'OK']);
-      folder = { value: newFolder.id, label: newFolder.title };
-
-      this.setState(
-        {
-          folder: newFolder,
-        },
-        () => {
-          this.onFolderChange(folder, { action: 'create-option', option: folder });
-        }
-      );
-    } else {
-      appEvents.emit(AppEvents.alertError, ['Folder could not be created']);
-    }
-
-    return folder;
-  };
-
-  private loadInitialValue = async () => {
-    const { initialTitle, rootName, initialFolderId, enableReset, dashboardId } = this.props;
+  const loadInitialValue = async () => {
     const resetFolder: SelectableValue<number> = { label: initialTitle, value: undefined };
     const rootFolder: SelectableValue<number> = { label: rootName, value: 0 };
 
-    const options = await this.searchFolders('');
+    const options = await getOptions('');
 
     let folder: SelectableValue<number> | null = null;
 
@@ -182,7 +133,7 @@ export class FolderPicker extends PureComponent<Props, State> {
       folder = options.find((option) => option.id === initialFolderId) || null;
     }
 
-    if (!folder && !this.props.allowEmpty) {
+    if (!folder && !allowEmpty) {
       if (contextSrv.isEditor) {
         folder = rootFolder;
       } else {
@@ -195,27 +146,93 @@ export class FolderPicker extends PureComponent<Props, State> {
         }
       }
     }
-
-    this.setState(
-      {
-        folder,
-      },
-      () => {
-        // if this is not the same as our initial value notify parent
-        if (folder && folder.value !== initialFolderId) {
-          this.props.onChange({ id: folder.value!, title: folder.label! });
-        }
-      }
-    );
+    setFolder(folder);
   };
 
-  render() {
-    const { folder } = this.state;
-    const { enableCreateNew, inputId, onClear } = this.props;
-    const isClearable = typeof onClear === 'function';
+  //Keep the textbox value in line with what is selected
+  useEffect(() => {
+    setInputValue(folder?.label || '');
+  }, [folder]);
 
-    return (
+  useEffect(() => {
+    // if this is not the same as our initial value notify parent
+    if (folder && folder.value !== initialFolderId) {
+      onChange({ id: folder.value!, title: folder.label! });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folder, initialFolderId]);
+
+  // initial values for dropdown
+  useAsync(async () => {
+    if (skipInitialLoad) {
+      const folder = await getInitialValues({
+        getFolder: getFolderById,
+        folderId: initialFolderId,
+        folderName: initialTitle,
+      });
+      setFolder(folder);
+    }
+
+    await loadInitialValue();
+  }, [skipInitialLoad, initialFolderId, initialTitle]);
+
+  const onFolderChange = useCallback(
+    (newFolder: SelectableValue<number>, actionMeta: ActionMeta) => {
+      if (!newFolder) {
+        newFolder = { value: 0, label: rootName };
+      }
+
+      if (actionMeta.action === 'clear' && onClear) {
+        onClear();
+        return;
+      }
+
+      setFolder(newFolder);
+      setInputValue(newFolder.label!);
+      onChange({ id: newFolder.value!, title: newFolder.label! });
+      //dissalowSlashes && setIsUsingSlashes(false)
+    },
+    [onChange, onClear, rootName]
+  );
+
+  const createNewFolder = useCallback(
+    async (folderName: string) => {
+      if (dissalowSlashes) {
+        if (containsSlashes(folderName)) {
+          //setIsUsingSlashes(true)
+          return false;
+        }
+        //isUsingSlashes && setIsUsingSlashes(false)
+      }
+      const newFolder = await createFolder({ title: folderName });
+      let folder: SelectableValue<number> = { value: -1, label: 'Not created' };
+
+      if (newFolder.id > -1) {
+        appEvents.emit(AppEvents.alertSuccess, ['Folder Created', 'OK']);
+        folder = { value: newFolder.id, label: newFolder.title };
+
+        setFolder(newFolder);
+        onFolderChange(folder, { action: 'create-option', option: folder });
+      } else {
+        appEvents.emit(AppEvents.alertError, ['Folder could not be created']);
+      }
+
+      return folder;
+    },
+    [onFolderChange, dissalowSlashes]
+  );
+
+  const handleInputChange = (value: string, actionMeta: InputActionMeta) => {
+    if (actionMeta.action === 'input-change') {
+      setInputValue(value);
+    }
+  };
+  return (
+    <>
       <div data-testid={selectors.components.FolderPicker.containerV2}>
+        {dissalowSlashes && isUsingSlashes && (
+          <div className={styles.slashNotAllowed}>Folders with &apos;/&apos; character are not allowed.</div>
+        )}
         <AsyncSelect
           inputId={inputId}
           aria-label={selectors.components.FolderPicker.input}
@@ -224,21 +241,33 @@ export class FolderPicker extends PureComponent<Props, State> {
           defaultValue={folder}
           value={folder}
           allowCustomValue={enableCreateNew}
-          loadOptions={this.debouncedSearch}
-          onChange={this.onFolderChange}
-          onCreateOption={this.createNewFolder}
+          loadOptions={debouncedSearch}
+          onChange={onFolderChange}
+          onCreateOption={createNewFolder}
           isClearable={isClearable}
+          // onKeyDown={onKeyDown}
+          inputValue={inputValue}
+          onInputChange={handleInputChange}
+          components={{
+            Input,
+          }}
         />
       </div>
-    );
+    </>
+  );
+}
+
+function mapSearchHitsToOptions(hits: DashboardSearchHit[], filterSlashes: boolean, filter?: FolderPickerFilter) {
+  const filteredHits = filter ? filter(hits) : hits;
+  console.log('filtering', filter, filterSlashes);
+  if (filterSlashes) {
+    return filteredHits
+      .filter((value: DashboardSearchHit) => !containsSlashes(value.title ?? ''))
+      .map((hit) => ({ label: hit.title, value: hit.id }));
+  } else {
+    return filteredHits.map((hit) => ({ label: hit.title, value: hit.id }));
   }
 }
-
-function mapSearchHitsToOptions(hits: DashboardSearchHit[], filter?: FolderPickerFilter) {
-  const filteredHits = filter ? filter(hits) : hits;
-  return filteredHits.map((hit) => ({ label: hit.title, value: hit.id }));
-}
-
 interface Args {
   getFolder: typeof getFolderById;
   folderId?: number;
@@ -257,3 +286,11 @@ export async function getInitialValues({ folderName, folderId, getFolder }: Args
   const folderDto = await getFolder(folderId);
   return { label: folderDto.title, value: folderId };
 }
+
+const getStyles = (theme: GrafanaTheme2) => ({
+  slashNotAllowed: css`
+    color: ${theme.colors.warning.main};
+    font-size: 12px;
+    margin-bottom: 2px;
+  `,
+});
