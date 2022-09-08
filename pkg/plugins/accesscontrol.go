@@ -30,6 +30,13 @@ var (
 	ScopeProvider = ac.NewScopeProvider("plugins")
 )
 
+// Protects install endpoints
+func InstallEvaluator(pluginID string) ac.Evaluator {
+	return ac.EvalAll(
+		ac.EvalPermission(ActionInstall),
+		ac.EvalPermission(ActionRead, ScopeProvider.GetResourceScope(pluginID)))
+}
+
 // Protects access to the Configuration > Plugins page
 func AdminAccessEvaluator(cfg *setting.Cfg) ac.Evaluator {
 	// This is a little hack to preserve the legacy behavior
