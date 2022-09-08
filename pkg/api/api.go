@@ -357,8 +357,8 @@ func (hs *HTTPServer) registerRoutes() {
 		})
 
 		pluginIDScope := plugins.ScopeProvider.GetResourceScope(ac.Parameter(":pluginId"))
-		apiRoute.Get("/plugins", routing.Wrap(hs.GetPluginList))                                                                                                         // RBAC check performed in handler
-		apiRoute.Get("/plugins/:pluginId/settings", authorize(reqSignedIn, ac.EvalPermission(plugins.ActionRead, pluginIDScope)), routing.Wrap(hs.GetPluginSettingByID)) // TODO have the plugins team approval
+		apiRoute.Get("/plugins", routing.Wrap(hs.GetPluginList)) // RBAC check performed in handler
+		apiRoute.Get("/plugins/:pluginId/settings", routing.Wrap(hs.GetPluginSettingByID))
 		apiRoute.Get("/plugins/:pluginId/markdown/:name", routing.Wrap(hs.GetPluginMarkdown))
 		apiRoute.Get("/plugins/:pluginId/health", routing.Wrap(hs.CheckHealth))
 		apiRoute.Any("/plugins/:pluginId/resources", authorize(reqSignedIn, ac.EvalPermission(plugins.ActionAppAccess, pluginIDScope)), hs.CallResource)

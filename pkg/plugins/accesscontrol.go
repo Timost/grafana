@@ -78,7 +78,7 @@ func DeclareRBACRoles(service ac.Service, cfg *setting.Cfg) error {
 		Role: ac.RoleDTO{
 			Name:        ac.FixedRolePrefix + "plugins:reader",
 			DisplayName: "Plugin Reader",
-			Description: "List plugins and their settings",
+			Description: "List core plugins",
 			Group:       "Plugins",
 			Permissions: []ac.Permission{
 				{Action: ActionRead, Scope: CoreScope},
@@ -119,7 +119,7 @@ func DeclareRBACRoles(service ac.Service, cfg *setting.Cfg) error {
 		Role: ac.RoleDTO{
 			Name:        ac.FixedRolePrefix + "plugins.external:reader",
 			DisplayName: "External Plugin Reader",
-			Description: "List non core plugins and their settings",
+			Description: "List non core plugins",
 			Group:       "Plugins",
 			Permissions: []ac.Permission{
 				{Action: ActionRead, Scope: ExternalScope},
