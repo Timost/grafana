@@ -68,7 +68,6 @@ export function FolderPicker(props: Props) {
   } = props;
   const isClearable = typeof onClear === 'function';
   const [folder, setFolder] = useState<SelectedFolder | null>(null);
-  //const [isUsingSlashes, setIsUsingSlashes] = useState(false);
   const [inputValue, setInputValue] = useState<string>('');
   const styles = useStyles2(getStyles);
   const isUsingSlashes = containsSlashes(inputValue);
@@ -190,7 +189,6 @@ export function FolderPicker(props: Props) {
       setFolder(newFolder);
       setInputValue(newFolder.label!);
       onChange({ id: newFolder.value!, title: newFolder.label! });
-      //dissalowSlashes && setIsUsingSlashes(false)
     },
     [onChange, onClear, rootName]
   );
@@ -199,10 +197,8 @@ export function FolderPicker(props: Props) {
     async (folderName: string) => {
       if (dissalowSlashes) {
         if (containsSlashes(folderName)) {
-          //setIsUsingSlashes(true)
           return false;
         }
-        //isUsingSlashes && setIsUsingSlashes(false)
       }
       const newFolder = await createFolder({ title: folderName });
       let folder: SelectableValue<number> = { value: -1, label: 'Not created' };
@@ -245,7 +241,6 @@ export function FolderPicker(props: Props) {
           onChange={onFolderChange}
           onCreateOption={createNewFolder}
           isClearable={isClearable}
-          // onKeyDown={onKeyDown}
           inputValue={inputValue}
           onInputChange={handleInputChange}
           components={{
@@ -259,7 +254,6 @@ export function FolderPicker(props: Props) {
 
 function mapSearchHitsToOptions(hits: DashboardSearchHit[], filterSlashes: boolean, filter?: FolderPickerFilter) {
   const filteredHits = filter ? filter(hits) : hits;
-  console.log('filtering', filter, filterSlashes);
   if (filterSlashes) {
     return filteredHits
       .filter((value: DashboardSearchHit) => !containsSlashes(value.title ?? ''))
