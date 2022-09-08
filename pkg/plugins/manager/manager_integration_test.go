@@ -25,6 +25,7 @@ import (
 	"github.com/grafana/grafana/pkg/plugins/manager/registry"
 	"github.com/grafana/grafana/pkg/plugins/manager/signature"
 	"github.com/grafana/grafana/pkg/plugins/manager/store"
+	"github.com/grafana/grafana/pkg/services/accesscontrol/actest"
 	"github.com/grafana/grafana/pkg/services/featuremgmt"
 	"github.com/grafana/grafana/pkg/services/licensing"
 	"github.com/grafana/grafana/pkg/services/searchV2"
@@ -102,7 +103,7 @@ func TestIntegrationPluginManager_Run(t *testing.T) {
 	pmCfg := plugins.FromGrafanaCfg(cfg)
 	reg := registry.ProvideService()
 	pm, err := ProvideService(cfg, reg, loader.New(pmCfg, license, signature.NewUnsignedAuthorizer(pmCfg),
-		provider.ProvideService(coreRegistry)), nil)
+		provider.ProvideService(coreRegistry)), nil, nil, actest.FakeAccessControl{})
 	require.NoError(t, err)
 	ps := store.ProvideService(reg)
 

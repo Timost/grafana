@@ -1,7 +1,11 @@
 package plugins
 
 import (
+	"context"
+	"strings"
+
 	"github.com/grafana/grafana/pkg/models"
+	"github.com/grafana/grafana/pkg/services/accesscontrol"
 	ac "github.com/grafana/grafana/pkg/services/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/setting"
@@ -126,4 +130,31 @@ func DeclareRBACRoles(service ac.Service, cfg *setting.Cfg) error {
 	}
 
 	return service.DeclareFixedRoles(AppPluginsReader, PluginsReader, PluginsWriter, PluginsMaintainer, PluginsExternalReader)
+}
+
+// NewIDScopeResolver provides an ScopeAttributeResolver able to
+// translate a scope prefixed with "plugins:id" into an class based scope.
+func NewIDScopeResolver(db Store) (string, ac.ScopeAttributeResolver) {
+	prefix := ScopeProvider.GetResourceScope("")
+	return prefix, accesscontrol.ScopeAttributeResolverFunc(func(ctx context.Context, orgID int64, initialScope string) ([]string, error) {
+		if !strings.HasPrefix(initialScope, prefix) {
+			return nil, accesscontrol.ErrInvalidScope
+		}
+
+		pluginID := initialScope[len(prefix):]
+		if pluginID == "" {
+			return nil, accesscontrol.ErrInvalidScope
+		}
+
+		plugin, exists := db.Plugin(ctx, pluginID)
+		if !exists {
+			return nil, ErrPluginNotInstalled // TODO replace error
+		}
+
+		if plugin.IsCorePlugin() {
+			return []string{initialScope, CoreScope}, nil
+		}
+
+		return []string{initialScope, ExternalScope}, nil
+	})
 }
