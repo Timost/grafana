@@ -9,13 +9,17 @@ import (
 
 const (
 	// Plugins actions
-	ActionInstall     = "plugins:install"
-	ActionWrite       = "plugins:write"
-	ActionRead        = "plugins:read"
-	ActionNonCoreRead = "plugins.noncore:read"
+	ActionInstall = "plugins:install"
+	ActionWrite   = "plugins:write"
+	ActionRead    = "plugins:read"
 
 	// App Plugins actions
 	ActionAppAccess = "plugins.app:access"
+
+	// Class based scopes
+	ClassBasedScopePrefix = "plugins:class:"
+	ExternalScope         = ClassBasedScopePrefix + "external"
+	CoreScope             = ClassBasedScopePrefix + "core"
 )
 
 var (
@@ -31,7 +35,7 @@ func AdminAccessEvaluator(cfg *setting.Cfg) ac.Evaluator {
 		return ac.EvalAny(
 			ac.EvalPermission(ActionWrite),
 			ac.EvalPermission(ActionInstall),
-			ac.EvalPermission(ActionNonCoreRead))
+			ac.EvalPermission(ActionRead, ClassBasedScopePrefix+"external")) // TODO check if bundle is needed
 	}
 
 	// Plugin Admin is disabled  => No installation
@@ -43,6 +47,15 @@ func ReqCanAdminPlugins(cfg *setting.Cfg) func(rc *models.ReqContext) bool {
 	return func(rc *models.ReqContext) bool {
 		return rc.OrgRole == org.RoleAdmin || cfg.PluginAdminEnabled && rc.IsGrafanaAdmin
 	}
+}
+
+// Legacy handler that protects listing plugins
+func ReqCanReadPlugin(pluginDef PluginDTO) func(c *models.ReqContext) bool {
+	fallback := ac.ReqSignedIn
+	if !pluginDef.IsCorePlugin() {
+		fallback = ac.ReqHasRole(org.RoleAdmin)
+	}
+	return fallback
 }
 
 func DeclareRBACRoles(service ac.Service, cfg *setting.Cfg) error {
@@ -65,7 +78,7 @@ func DeclareRBACRoles(service ac.Service, cfg *setting.Cfg) error {
 			Description: "List plugins and their settings",
 			Group:       "Plugins",
 			Permissions: []ac.Permission{
-				{Action: ActionRead, Scope: ScopeProvider.GetResourceAllScope()},
+				{Action: ActionRead, Scope: CoreScope},
 			},
 		},
 		Grants: []string{string(org.RoleViewer)},
@@ -99,18 +112,18 @@ func DeclareRBACRoles(service ac.Service, cfg *setting.Cfg) error {
 		PluginsMaintainer.Grants = []string{}
 	}
 
-	PluginsNonCoreReader := ac.RoleRegistration{
+	PluginsExternalReader := ac.RoleRegistration{
 		Role: ac.RoleDTO{
-			Name:        ac.FixedRolePrefix + "plugins.noncore:reader",
-			DisplayName: "Non-Core Plugin Reader",
-			Description: "List non plugins and their settings",
+			Name:        ac.FixedRolePrefix + "plugins.external:reader",
+			DisplayName: "External Plugin Reader",
+			Description: "List non core plugins and their settings",
 			Group:       "Plugins",
 			Permissions: []ac.Permission{
-				{Action: ActionNonCoreRead, Scope: ScopeProvider.GetResourceAllScope()},
+				{Action: ActionRead, Scope: ExternalScope},
 			},
 		},
 		Grants: []string{string(org.RoleAdmin), ac.RoleGrafanaAdmin},
 	}
 
-	return service.DeclareFixedRoles(AppPluginsReader, PluginsReader, PluginsWriter, PluginsMaintainer, PluginsNonCoreReader)
+	return service.DeclareFixedRoles(AppPluginsReader, PluginsReader, PluginsWriter, PluginsMaintainer, PluginsExternalReader)
 }

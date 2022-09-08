@@ -23,7 +23,6 @@ import (
 	"github.com/grafana/grafana/pkg/plugins/repo"
 	"github.com/grafana/grafana/pkg/plugins/storage"
 	ac "github.com/grafana/grafana/pkg/services/accesscontrol"
-	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/services/pluginsettings"
 	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/web"
@@ -50,17 +49,6 @@ func (hs *HTTPServer) GetPluginList(c *models.ReqContext) response.Response {
 	filteredPluginDefinitions := []plugins.PluginDTO{}
 	filteredPluginIDs := map[string]bool{}
 	for _, pluginDef := range pluginDefinitions {
-		// Enforce RBAC on plugins
-		// FIXME: use a checker instead to leverage wildcard scopes
-		if !pluginDef.IsCorePlugin() && !hasAccess(ac.ReqHasRole(org.RoleAdmin),
-			ac.EvalPermission(plugins.ActionNonCoreRead, plugins.ScopeProvider.GetResourceScope(pluginDef.ID))) {
-			continue
-		}
-		if pluginDef.IsCorePlugin() && !hasAccess(ac.ReqSignedIn,
-			ac.EvalPermission(plugins.ActionRead, plugins.ScopeProvider.GetResourceScope(pluginDef.ID))) {
-			continue
-		}
-
 		// filter out app sub plugins
 		if embeddedFilter == "0" && pluginDef.IncludedInAppID != "" {
 			continue
@@ -68,6 +56,13 @@ func (hs *HTTPServer) GetPluginList(c *models.ReqContext) response.Response {
 
 		// filter out core plugins
 		if (coreFilter == "0" && pluginDef.IsCorePlugin()) || (coreFilter == "1" && !pluginDef.IsCorePlugin()) {
+			continue
+		}
+
+		// Enforce RBAC on plugins
+		// FIXME: use a checker instead to leverage wildcard scopes
+		if !hasAccess(plugins.ReqCanReadPlugin(pluginDef),
+			ac.EvalPermission(plugins.ActionRead, plugins.ScopeProvider.GetResourceScope(pluginDef.ID))) {
 			continue
 		}
 
@@ -146,16 +141,6 @@ func (hs *HTTPServer) GetPluginSettingByID(c *models.ReqContext) response.Respon
 	plugin, exists := hs.pluginStore.Plugin(c.Req.Context(), pluginID)
 	if !exists {
 		return response.Error(http.StatusNotFound, "Plugin not found, no installed plugin with that id", nil)
-	}
-
-	hasAccess := ac.HasAccess(hs.AccessControl, c)
-	if plugin.IsCorePlugin() && !hasAccess(ac.ReqSignedIn,
-		ac.EvalPermission(plugins.ActionRead, plugins.ScopeProvider.GetResourceScope(plugin.ID))) {
-		return response.Error(http.StatusForbidden, "Access Denied", nil)
-	}
-	if !plugin.IsCorePlugin() && !hasAccess(ac.ReqSignedIn,
-		ac.EvalPermission(plugins.ActionNonCoreRead, plugins.ScopeProvider.GetResourceScope(plugin.ID))) {
-		return response.Error(http.StatusForbidden, "Access Denied", nil)
 	}
 
 	dto := &dtos.PluginSetting{
