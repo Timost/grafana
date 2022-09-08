@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/grafana/grafana/pkg/models"
-	"github.com/grafana/grafana/pkg/services/accesscontrol"
 	ac "github.com/grafana/grafana/pkg/services/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/setting"
@@ -21,6 +20,7 @@ const (
 	ActionAppAccess = "plugins.app:access"
 
 	// Class based scopes
+	// TODO check if bundle is needed
 	ClassBasedScopePrefix = "plugins:class:"
 	ExternalScope         = ClassBasedScopePrefix + "external"
 	CoreScope             = ClassBasedScopePrefix + "core"
@@ -39,7 +39,7 @@ func AdminAccessEvaluator(cfg *setting.Cfg) ac.Evaluator {
 		return ac.EvalAny(
 			ac.EvalPermission(ActionWrite),
 			ac.EvalPermission(ActionInstall),
-			ac.EvalPermission(ActionRead, ClassBasedScopePrefix+"external")) // TODO check if bundle is needed
+			ac.EvalPermission(ActionRead, ExternalScope))
 	}
 
 	// Plugin Admin is disabled  => No installation
@@ -136,14 +136,14 @@ func DeclareRBACRoles(service ac.Service, cfg *setting.Cfg) error {
 // translate a scope prefixed with "plugins:id" into an class based scope.
 func NewIDScopeResolver(db Store) (string, ac.ScopeAttributeResolver) {
 	prefix := ScopeProvider.GetResourceScope("")
-	return prefix, accesscontrol.ScopeAttributeResolverFunc(func(ctx context.Context, orgID int64, initialScope string) ([]string, error) {
+	return prefix, ac.ScopeAttributeResolverFunc(func(ctx context.Context, orgID int64, initialScope string) ([]string, error) {
 		if !strings.HasPrefix(initialScope, prefix) {
-			return nil, accesscontrol.ErrInvalidScope
+			return nil, ac.ErrInvalidScope
 		}
 
 		pluginID := initialScope[len(prefix):]
 		if pluginID == "" {
-			return nil, accesscontrol.ErrInvalidScope
+			return nil, ac.ErrInvalidScope
 		}
 
 		plugin, exists := db.Plugin(ctx, pluginID)
