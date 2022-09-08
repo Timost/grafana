@@ -55,11 +55,10 @@ func ReqCanAdminPlugins(cfg *setting.Cfg) func(rc *models.ReqContext) bool {
 
 // Legacy handler that protects listing plugins
 func ReqCanReadPlugin(pluginDef PluginDTO) func(c *models.ReqContext) bool {
-	fallback := ac.ReqSignedIn
-	if !pluginDef.IsCorePlugin() {
-		fallback = ac.ReqHasRole(org.RoleAdmin)
+	if pluginDef.IsCorePlugin() {
+		return ac.ReqSignedIn
 	}
-	return fallback
+	return ac.ReqHasRole(org.RoleAdmin)
 }
 
 func DeclareRBACRoles(service ac.Service, cfg *setting.Cfg) error {
